@@ -10,7 +10,7 @@ import {
 /**
  * Import your Room files
  */
-import { MyRoom } from "./rooms/MyRoom.js";
+import { DominoRoom } from "./rooms/DominoRoom.js";
 
 const server = defineServer({
 
@@ -18,7 +18,7 @@ const server = defineServer({
    * Define your room handlers:
    */
   rooms: {
-    my_room: defineRoom(MyRoom),
+    domino: defineRoom(DominoRoom),
   },
 
   /**

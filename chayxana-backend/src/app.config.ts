@@ -11,6 +11,7 @@ import {
  * Import your Room files
  */
 import { DominoRoom } from "./rooms/DominoRoom.js";
+import { Domino365Room } from "./rooms/Domino365Room.js";
 
 const server = defineServer({
 
@@ -19,6 +20,7 @@ const server = defineServer({
    */
   rooms: {
     domino: defineRoom(DominoRoom),
+    domino365: defineRoom(Domino365Room),
   },
 
   /**
@@ -64,4 +66,3 @@ const server = defineServer({
 });
 
 export default server;
-

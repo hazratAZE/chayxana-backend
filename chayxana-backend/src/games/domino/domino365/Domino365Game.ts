@@ -153,6 +153,32 @@ export function hasPlayableDomino365Tile(
   );
 }
 
+export interface Domino365PlayableMove {
+  tileId: string;
+  endId?: string;
+}
+
+export function findFirstPlayableDomino365Move(
+  board: Domino365Board,
+  hand: DominoTile[]
+): Domino365PlayableMove | null {
+  if (hand.length === 0) return null;
+
+  if (board.tiles.length === 0) {
+    return { tileId: hand[0].id };
+  }
+
+  for (const tile of hand) {
+    for (const end of board.openEnds) {
+      if (canPlaceDomino365Tile(board, tile, end.id)) {
+        return { tileId: tile.id, endId: end.id };
+      }
+    }
+  }
+
+  return null;
+}
+
 function assertGameIsPlaying(game: Domino365GameState): void {
   if (game.status !== "playing") {
     throw new Error("Game is not currently playing");

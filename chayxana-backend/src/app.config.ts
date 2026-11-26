@@ -19,8 +19,11 @@ const server = defineServer({
    * Define your room handlers:
    */
   rooms: {
-    domino: defineRoom(DominoRoom),
-    domino365: defineRoom(Domino365Room),
+    domino: defineRoom(DominoRoom)
+      .sortBy({ clients: -1 }),
+
+    domino365: defineRoom(Domino365Room)
+      .sortBy({ clients: -1 }),
   },
 
   /**

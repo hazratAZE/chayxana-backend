@@ -5,6 +5,7 @@ export const Domino365RoomPlayer = schema({
   name: t.string(),
   teamId: t.string(),
   ready: t.boolean().default(false),
+  connected: t.boolean().default(true),
   handCount: t.number().default(7),
 });
 
@@ -56,6 +57,8 @@ export const Domino365RoomState = schema({
   spinnerValue: t.number().default(-1),
 
   winnerTeamId: t.string().default(""),
+
+  turnExpiresAt: t.number().default(0),
 });
 
 export type Domino365RoomState =

@@ -1,4 +1,6 @@
-import { Room, type Client, Delayed } from "colyseus";
+import { Room, ServerError, type Client, Delayed } from "colyseus";
+
+import { verifyToken, type AuthUser } from "../services/firebase.js";
 
 import {
   Domino365RoomState,
@@ -23,6 +25,8 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
   private pausedTurnRemainingMs = 0;
   private pausedTurnPlayerId: string | null = null;
   private roomCleanupTimer: Delayed | null = null;
+  // Server-daxili UID xəritəsi: sessionId -> firebase uid (Public Schema-ya çıxarılmır)
+  private playerUids = new Map<string, string>();
 
   onCreate(): void {
     console.log("Domino365 Room created:", this.roomId);
@@ -54,6 +58,50 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
     this.onMessage("get_hand", (client: Client) => {
       this.sendPrivateHand(client);
     });
+
+    // Müvəqqəti real-time mesajlaşma testi.
+    this.onMessage(
+      "test_message",
+      (
+        client: Client,
+        message: { text?: string; message?: string } | string
+      ) => {
+        const rawText =
+          typeof message === "string"
+            ? message
+            : typeof message?.text === "string"
+            ? message.text
+            : typeof message?.message === "string"
+            ? message.message
+            : null;
+
+        if (!rawText) {
+          this.sendGameError(
+            client,
+            new Error("Invalid test message payload")
+          );
+          return;
+        }
+
+        const text = rawText.trim().slice(0, 200);
+        if (text.length === 0) {
+          this.sendGameError(
+            client,
+            new Error("Test message cannot be empty")
+          );
+          return;
+        }
+
+        this.broadcast(
+          "test_message",
+          {
+            sessionId: client.sessionId,
+            text,
+          },
+          { except: client }
+        );
+      }
+    );
 
     // Oyunçu daş oynayır.
     this.onMessage(
@@ -223,9 +271,28 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
     });
   }
 
+  async onAuth(
+    client: Client,
+    options: { token?: string; name?: string }
+  ): Promise<AuthUser> {
+    try {
+      const user = await verifyToken(options?.token, options);
+      if (!user || !user.uid) {
+        throw new Error("Token does not contain a valid UID");
+      }
+      return user;
+    } catch (error) {
+      throw new ServerError(
+        401,
+        error instanceof Error ? error.message : "Authentication failed"
+      );
+    }
+  }
+
   onJoin(
     client: Client,
-    options: { name?: string }
+    options: { name?: string },
+    auth?: AuthUser
   ): void {
     console.log(
       "Domino365 Player joined:",
@@ -234,14 +301,33 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
     );
 
     if (this.state.status !== "waiting") {
-      throw new Error("Game has already started");
+      throw new ServerError(403, "Game has already started");
     }
 
     const slot = this.state.players.length;
 
     if (slot >= 4) {
-      throw new Error("Room is full");
+      throw new ServerError(403, "Room is full");
     }
+
+    const uid = auth?.uid;
+    if (!uid) {
+      throw new ServerError(401, "Unauthorized player");
+    }
+
+    // Eyni otaqda eyni UID ilə artıq oyunçu varsa (qoşulu və ya reconnect gözləyən), yeni join-i blokla
+    for (const [existingSessionId, existingUid] of this.playerUids.entries()) {
+      if (existingUid === uid) {
+        const existingPlayer = this.state.players.find(
+          (p) => p.sessionId === existingSessionId
+        );
+        if (existingPlayer) {
+          throw new ServerError(409, "User is already in this room");
+        }
+      }
+    }
+
+    this.playerUids.set(client.sessionId, uid);
 
     const teamId = slot % 2 === 0 ? "A" : "B";
 
@@ -249,7 +335,7 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       typeof options?.name === "string" &&
       options.name.trim().length > 0
         ? options.name.trim().slice(0, 20)
-        : `Player ${slot + 1}`;
+        : (auth?.name || `Player ${slot + 1}`);
 
     const player = new Domino365RoomPlayer();
 
@@ -366,6 +452,7 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
 
     // Oyun hələ başlamayıbsa, oyunçunu otaqdan çıxar.
     if (this.state.status === "waiting") {
+      this.playerUids.delete(client.sessionId);
       this.state.players.splice(playerIndex, 1);
 
       for (let i = 0; i < this.state.players.length; i++) {
@@ -760,6 +847,8 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       this.roomCleanupTimer.clear();
       this.roomCleanupTimer = null;
     }
+
+    this.playerUids.clear();
 
     console.log("Domino365 Room disposed:", this.roomId);
   }

@@ -2,3 +2,9 @@ node_modules
 build
 .colyseus-cloud.json
 .devmode.json
+
+# Firebase & Secrets
+*serviceAccount*.json
+*service-account*.json
+*firebase-key*.json
+.env*.local

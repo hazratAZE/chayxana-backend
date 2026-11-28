@@ -503,5 +503,41 @@ describe("Domino multiplayer tests", () => {
 
       assert.strictEqual(room.state.players.length, 0);
     });
+
+    it("should broadcast test_message to other clients only and reject empty/invalid payloads", async () => {
+      const room = await colyseus.createRoom<Domino365RoomState>("domino365", {});
+      const client1 = await colyseus.connectTo(room, { name: "Sender" });
+      const client2 = await colyseus.connectTo(room, { name: "Receiver" });
+
+      const receivedBySender: any[] = [];
+      const receivedByReceiver: any[] = [];
+      const senderErrors: any[] = [];
+
+      client1.onMessage("test_message", (msg) => receivedBySender.push(msg));
+      client2.onMessage("test_message", (msg) => receivedByReceiver.push(msg));
+      client1.onMessage("game_error", (err) => senderErrors.push(err));
+
+      // Valid message
+      client1.send("test_message", { text: "Salam Chayxana!" });
+      await new Promise((r) => setTimeout(r, 80));
+
+      assert.strictEqual(receivedBySender.length, 0, "Sender must not receive own test_message");
+      assert.strictEqual(receivedByReceiver.length, 1);
+      assert.deepStrictEqual(receivedByReceiver[0], {
+        sessionId: client1.sessionId,
+        text: "Salam Chayxana!",
+      });
+
+      // Empty and invalid payloads
+      client1.send("test_message", { text: "   " });
+      client1.send("test_message", { invalid: 123 });
+      await new Promise((r) => setTimeout(r, 80));
+
+      assert.strictEqual(receivedByReceiver.length, 1, "Invalid/empty messages must not be broadcast");
+      assert.strictEqual(senderErrors.length, 2, "Sender must receive game_error for invalid/empty payloads");
+
+      await client1.leave();
+      await client2.leave();
+    });
   });
 });

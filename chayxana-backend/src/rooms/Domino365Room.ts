@@ -50,6 +50,7 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
 
         if (name.length > 0) {
           player.name = name;
+          this.broadcastWaitingRoomUpdated();
         }
       }
     );
@@ -342,6 +343,7 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
     player.sessionId = client.sessionId;
     player.name = name;
     player.teamId = teamId;
+    player.seatIndex = slot;
     player.ready = false;
     player.connected = true;
     player.handCount = 7;
@@ -352,8 +354,11 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       playerId: client.sessionId,
       name,
       teamId,
+      seatIndex: slot,
       playerCount: this.state.players.length,
     });
+
+    this.broadcastWaitingRoomUpdated();
 
     if (this.state.players.length === 4) {
       this.startGame();
@@ -388,6 +393,10 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       playerName: player.name,
       reconnectTimeout: 30,
     });
+
+    if (this.state.status === "waiting") {
+      this.broadcastWaitingRoomUpdated();
+    }
 
     try {
       // 30 saniyə ərzində reconnect gözləyirik.
@@ -437,6 +446,10 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       playerId: client.sessionId,
       playerName: player.name,
     });
+
+    if (this.state.status === "waiting") {
+      this.broadcastWaitingRoomUpdated();
+    }
   }
 
   onLeave(client: Client): void {
@@ -456,6 +469,7 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
       this.state.players.splice(playerIndex, 1);
 
       for (let i = 0; i < this.state.players.length; i++) {
+        this.state.players[i].seatIndex = i;
         this.state.players[i].teamId =
           i % 2 === 0 ? "A" : "B";
       }
@@ -465,21 +479,26 @@ export class Domino365Room extends Room<{ state: Domino365RoomState }> {
         playerCount: this.state.players.length,
       });
 
-      this.broadcast("waiting_room_updated", {
-        players: this.state.players.map((roomPlayer, index) => ({
-          sessionId: roomPlayer.sessionId,
-          name: roomPlayer.name,
-          teamId: roomPlayer.teamId,
-          seatIndex: index,
-        })),
-        playerCount: this.state.players.length,
-      });
+      this.broadcastWaitingRoomUpdated();
 
       return;
     }
 
     // Oyun zamanı oyunçu çıxarsa, oyunu dayandır.
     this.abandonGame(client.sessionId);
+  }
+
+  private broadcastWaitingRoomUpdated(): void {
+    this.broadcast("waiting_room_updated", {
+      players: this.state.players.map((roomPlayer) => ({
+        sessionId: roomPlayer.sessionId,
+        name: roomPlayer.name,
+        teamId: roomPlayer.teamId,
+        seatIndex: roomPlayer.seatIndex,
+        connected: roomPlayer.connected,
+      })),
+      playerCount: this.state.players.length,
+    });
   }
 
   private startGame(): void {

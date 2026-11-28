@@ -4,6 +4,7 @@ export const Domino365RoomPlayer = schema({
   sessionId: t.string(),
   name: t.string(),
   teamId: t.string(),
+  seatIndex: t.number().default(0),
   ready: t.boolean().default(false),
   connected: t.boolean().default(true),
   handCount: t.number().default(7),
